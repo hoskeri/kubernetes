@@ -70,6 +70,7 @@ func TestGetAPIRequestInfo(t *testing.T) {
 		{"GET", "/api/v1/namespaces/other/pods/foo/proxy/subpath", "get", "api", "", "v1", "other", "pods", "proxy", "foo", []string{"pods", "foo", "proxy", "subpath"}},
 		{"PUT", "/api/v1/namespaces/other/finalize", "update", "api", "", "v1", "other", "namespaces", "finalize", "other", []string{"namespaces", "other", "finalize"}},
 		{"PUT", "/api/v1/namespaces/other/status", "update", "api", "", "v1", "other", "namespaces", "status", "other", []string{"namespaces", "other", "status"}},
+		{"GET", "/api/v1/nodes/nodename/proxy/subpath", "get", "api", "", "v1", "", "nodes", "proxy", "nodename", []string{"nodes", "nodename", "proxy", "subpath"}},
 
 		// verb identification
 		{"PATCH", "/api/v1/namespaces/other/pods/foo", "patch", "api", "", "v1", "other", "pods", "", "foo", []string{"pods", "foo"}},
