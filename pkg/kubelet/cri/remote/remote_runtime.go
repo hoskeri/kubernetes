@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -309,6 +311,8 @@ func (r *remoteRuntimeService) CreateContainer(ctx context.Context, podSandBoxID
 	return r.createContainerV1(ctx, podSandBoxID, config, sandboxConfig)
 }
 
+var crashContainer sync.Map
+
 func (r *remoteRuntimeService) createContainerV1(ctx context.Context, podSandBoxID string, config *runtimeapi.ContainerConfig, sandboxConfig *runtimeapi.PodSandboxConfig) (string, error) {
 	resp, err := r.runtimeClient.CreateContainer(ctx, &runtimeapi.CreateContainerRequest{
 		PodSandboxId:  podSandBoxID,
@@ -328,6 +332,18 @@ func (r *remoteRuntimeService) createContainerV1(ctx context.Context, podSandBox
 		return "", err
 	}
 
+	f, err := os.ReadFile("/run/crash-container-names")
+	if err != nil {
+		klog.ErrorS(err, "os.ReadFile", "/run/crash-container-names")
+	}
+
+	fs := strings.TrimSpace(string(f))
+
+	if strings.Compare(config.GetMetadata().Name, fs) == 0 {
+		klog.Warningf("will crash StartContainer named: %q, id %q", fs, resp.ContainerId)
+		crashContainer.Store(resp.ContainerId, true)
+	}
+
 	return resp.ContainerId, nil
 }
 
@@ -336,6 +352,10 @@ func (r *remoteRuntimeService) StartContainer(ctx context.Context, containerID s
 	klog.V(10).InfoS("[RemoteRuntimeService] StartContainer", "containerID", containerID, "timeout", r.timeout)
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
+
+	if _, ok := crashContainer.Load(containerID); ok {
+		klog.Exitf("crashing on StartContainer with id: %q", containerID)
+	}
 
 	if _, err := r.runtimeClient.StartContainer(ctx, &runtimeapi.StartContainerRequest{
 		ContainerId: containerID,
