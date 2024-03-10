@@ -529,10 +529,12 @@ func shouldRestartOnFailure(pod *v1.Pod) bool {
 
 func containerSucceeded(c *v1.Container, podStatus *kubecontainer.PodStatus) bool {
 	cStatus := podStatus.FindContainerStatusByName(c.Name)
-	if cStatus == nil || cStatus.State == kubecontainer.ContainerStateRunning {
-		return false
+	// Container succeeded because it has exited with a successful exit code.
+	if cStatus != nil && cStatus.State == kubecontainer.ContainerStateExited && cStatus.ExitCode == 0 {
+		return true
 	}
-	return cStatus.ExitCode == 0
+
+	return false
 }
 
 func isInPlacePodVerticalScalingAllowed(pod *v1.Pod) bool {
