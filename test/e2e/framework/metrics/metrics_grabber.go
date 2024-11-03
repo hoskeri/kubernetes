@@ -217,6 +217,7 @@ func (g *Grabber) getMetricsFromNode(ctx context.Context, nodeName string, kubel
 	finished := make(chan struct{}, 1)
 	var err error
 	var rawOutput []byte
+
 	go func() {
 		rawOutput, err = g.client.CoreV1().RESTClient().Get().
 			Resource("nodes").

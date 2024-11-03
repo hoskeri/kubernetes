@@ -22,6 +22,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -150,9 +151,9 @@ var _ = SIGDescribe("ResourceMetricsAPI", nodefeature.ResourceMetrics, func() {
 	})
 })
 
-func getResourceMetrics(ctx context.Context) (e2emetrics.KubeletMetrics, error) {
+func getResourceMetrics(ctx context.Context, config *rest.Config) (e2emetrics.KubeletMetrics, error) {
 	ginkgo.By("getting stable resource metrics API")
-	return e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, nodeNameOrIP()+":10255", "/metrics/resource")
+	return e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, config, "localhost", "/metrics/resource")
 }
 
 func nodeID(element interface{}) string {

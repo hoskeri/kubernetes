@@ -602,7 +602,7 @@ func runEvictionTest(f *framework.Framework, pressureTimeout time.Duration, expe
 						nodeUnreadyTime = time.Now()
 					}
 				}
-				logKubeletLatencyMetrics(ctx, kubeletmetrics.EvictionStatsAgeKey)
+				logKubeletLatencyMetrics(ctx, f.ClientConfig(), kubeletmetrics.EvictionStatsAgeKey)
 				logFunc(ctx)
 
 				verifyEvictionPeriod(ctx, f, testSpecs, nodeUnreadyTime)
@@ -621,7 +621,7 @@ func runEvictionTest(f *framework.Framework, pressureTimeout time.Duration, expe
 			ginkgo.By(fmt.Sprintf("Waiting for NodeCondition: %s to no longer exist on the node", expectedNodeCondition))
 			gomega.Eventually(ctx, func(ctx context.Context) error {
 				logFunc(ctx)
-				logKubeletLatencyMetrics(ctx, kubeletmetrics.EvictionStatsAgeKey)
+				logKubeletLatencyMetrics(ctx, nil, kubeletmetrics.EvictionStatsAgeKey)
 				if expectedNodeCondition != noPressure && hasNodeCondition(ctx, f, expectedNodeCondition) {
 					return fmt.Errorf("Conditions haven't returned to normal, node still has %s", expectedNodeCondition)
 				}
@@ -634,7 +634,7 @@ func runEvictionTest(f *framework.Framework, pressureTimeout time.Duration, expe
 					return fmt.Errorf("%s disappeared and then reappeared", expectedNodeCondition)
 				}
 				logFunc(ctx)
-				logKubeletLatencyMetrics(ctx, kubeletmetrics.EvictionStatsAgeKey)
+				logKubeletLatencyMetrics(ctx, nil, kubeletmetrics.EvictionStatsAgeKey)
 				return verifyEvictionOrdering(ctx, f, testSpecs)
 			}, postTestConditionMonitoringPeriod, evictionPollInterval).Should(gomega.Succeed())
 

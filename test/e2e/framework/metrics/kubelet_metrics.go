@@ -19,8 +19,6 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,7 +26,9 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/component-base/metrics/testutil"
+	"k8s.io/kubernetes/pkg/cluster/ports"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -68,17 +68,24 @@ func NewKubeletMetrics() KubeletMetrics {
 }
 
 // GrabKubeletMetricsWithoutProxy retrieve metrics from the kubelet on the given node using a simple GET over http.
-func GrabKubeletMetricsWithoutProxy(ctx context.Context, nodeName, path string) (KubeletMetrics, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("http://%s%s", nodeName, path), nil)
+func GrabKubeletMetricsWithoutProxy(ctx context.Context, config *rest.Config, nodeName, path string) (KubeletMetrics, error) {
+	var lc *rest.Config
+
+	if config == nil {
+		lc = &rest.Config{
+			Host: fmt.Sprintf("http://%s:%d%s", nodeName, ports.KubeletReadOnlyPort, path),
+		}
+	} else {
+		lc := rest.CopyConfig(config)
+		lc.Host = fmt.Sprintf("https://%s:%d%s", nodeName, ports.KubeletPort, path)
+	}
+
+	urc, err := rest.UnversionedRESTClientFor(lc)
 	if err != nil {
 		return KubeletMetrics{}, err
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return KubeletMetrics{}, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+
+	body, err := urc.Get().AbsPath(path).DoRaw(ctx)
 	if err != nil {
 		return KubeletMetrics{}, err
 	}
@@ -117,7 +124,7 @@ func (a KubeletLatencyMetrics) Less(i, j int) bool { return a[i].Latency > a[j].
 // or else, the function will try to get kubelet metrics directly from the node.
 func getKubeletMetricsFromNode(ctx context.Context, c clientset.Interface, nodeName string) (KubeletMetrics, error) {
 	if c == nil {
-		return GrabKubeletMetricsWithoutProxy(ctx, nodeName, "/metrics")
+		return GrabKubeletMetricsWithoutProxy(ctx, nil, nodeName, "/metrics")
 	}
 	grabber, err := NewMetricsGrabber(ctx, c, nil, nil, true, false, false, false, false, false)
 	if err != nil {

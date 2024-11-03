@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	kubeletstatsv1alpha1 "k8s.io/kubelet/pkg/apis/stats/v1alpha1"
 	kubeletconfig "k8s.io/kubernetes/pkg/kubelet/apis/config"
@@ -47,10 +48,6 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	imageutils "k8s.io/kubernetes/test/utils/image"
 	admissionapi "k8s.io/pod-security-admission/api"
-)
-
-const (
-	kubeletAddr = "localhost:10255"
 )
 
 var _ = SIGDescribe("Density", framework.WithSerial(), framework.WithSlow(), func() {
@@ -464,9 +461,9 @@ func createBatchPodWithRateControl(ctx context.Context, f *framework.Framework, 
 }
 
 // getPodStartLatency gets prometheus metric 'pod start latency' from kubelet
-func getPodStartLatency(ctx context.Context, node string) (e2emetrics.KubeletLatencyMetrics, error) {
+func getPodStartLatency(ctx context.Context, config *rest.Config, node string) (e2emetrics.KubeletLatencyMetrics, error) {
 	latencyMetrics := e2emetrics.KubeletLatencyMetrics{}
-	ms, err := e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, node, "/metrics")
+	ms, err := e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, config, node, "/metrics")
 	framework.ExpectNoError(err, "Failed to get kubelet metrics without proxy in node %s", node)
 
 	for _, samples := range ms {
@@ -628,7 +625,7 @@ func logAndVerifyLatency(ctx context.Context, batchLag time.Duration, e2eLags []
 	printLatencies(e2eLags, "worst client e2e total latencies")
 
 	// TODO(coufon): do not trust 'kubelet' metrics since they are not reset!
-	latencyMetrics, _ := getPodStartLatency(ctx, kubeletAddr)
+	latencyMetrics, _ := getPodStartLatency(ctx, nil, "localhost")
 	framework.Logf("Kubelet Prometheus metrics (not reset):\n%s", framework.PrettyPrintJSON(latencyMetrics))
 
 	podStartupLatency := extractLatencyMetrics(e2eLags)

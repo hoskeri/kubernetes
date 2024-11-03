@@ -44,6 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/component-base/featuregate"
 	internalapi "k8s.io/cri-api/pkg/apis"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -302,12 +303,12 @@ func getLocalTestNode(ctx context.Context, f *framework.Framework) (*v1.Node, bo
 // logKubeletLatencyMetrics logs KubeletLatencyMetrics computed from the Prometheus
 // metrics exposed on the current node and identified by the metricNames.
 // The Kubelet subsystem prefix is automatically prepended to these metric names.
-func logKubeletLatencyMetrics(ctx context.Context, metricNames ...string) {
+func logKubeletLatencyMetrics(ctx context.Context, config *rest.Config, metricNames ...string) {
 	metricSet := sets.NewString()
 	for _, key := range metricNames {
 		metricSet.Insert(kubeletmetrics.KubeletSubsystem + "_" + key)
 	}
-	metric, err := e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, fmt.Sprintf("%s:%d", nodeNameOrIP(), ports.KubeletReadOnlyPort), "/metrics")
+	metric, err := e2emetrics.GrabKubeletMetricsWithoutProxy(ctx, config, "localhost", "/metrics")
 	if err != nil {
 		framework.Logf("Error getting kubelet metrics: %v", err)
 	} else {
@@ -620,8 +621,4 @@ func WaitForPodInitContainerToFail(ctx context.Context, c clientset.Interface, n
 		}
 		return false, nil
 	})
-}
-
-func nodeNameOrIP() string {
-	return "localhost"
 }

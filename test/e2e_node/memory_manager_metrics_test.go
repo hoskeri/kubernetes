@@ -132,7 +132,7 @@ var _ = SIGDescribe("Memory Manager Metrics", framework.WithSerial(), feature.Me
 			ginkgo.By("Ensuring the metrics match the expectations a few more times")
 			gomega.Consistently(getKubeletMetrics, 1*time.Minute, 15*time.Second).WithContext(ctx).Should(matchResourceMetrics)
 
-			values, err := getKubeletMetrics(ctx)
+			values, err := getKubeletMetrics(ctx, nil)
 			framework.ExpectNoError(err, "error getting the kubelet metrics for sanity check")
 			err = validateMetrics(
 				values,
@@ -179,7 +179,7 @@ var _ = SIGDescribe("Memory Manager Metrics", framework.WithSerial(), feature.Me
 			ginkgo.By("Ensuring the metrics match the expectations a few more times")
 			gomega.Consistently(getKubeletMetrics, 1*time.Minute, 15*time.Second).WithContext(ctx).Should(matchResourceMetrics)
 
-			values, err := getKubeletMetrics(ctx)
+			values, err := getKubeletMetrics(ctx, nil)
 			framework.ExpectNoError(err, "error getting the kubelet metrics for sanity check")
 			err = validateMetrics(
 				values,
