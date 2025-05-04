@@ -58,10 +58,11 @@ type reloadableAuthorizerResolver struct {
 	reloadInterval         time.Duration
 	requireNonWebhookTypes sets.Set[authzconfig.AuthorizerType]
 
-	nodeAuthorizer *node.NodeAuthorizer
-	rbacAuthorizer *rbac.RBACAuthorizer
-	abacAuthorizer abac.PolicyList
-	compiler       authorizationcel.Compiler // non-nil and shared across reloads.
+	nodeAuthorizer             *node.NodeAuthorizer
+	rbacAuthorizer             *rbac.RBACAuthorizer
+	systemPrivilegedAuthorizer authorizer.Authorizer
+	abacAuthorizer             abac.PolicyList
+	compiler                   authorizationcel.Compiler // non-nil and shared across reloads.
 
 	lastLoadedLock   sync.Mutex
 	lastLoadedConfig *authzconfig.AuthorizationConfiguration
@@ -94,13 +95,20 @@ func (r *reloadableAuthorizerResolver) newForConfig(authzConfig *authzconfig.Aut
 		ruleResolvers []authorizer.RuleResolver
 	)
 
-	// Add SystemPrivilegedGroup as an authorizing group
-	superuserAuthorizer := authorizerfactory.NewPrivilegedGroups(user.SystemPrivilegedGroup)
-	authorizers = append(authorizers, superuserAuthorizer)
+	// Add SystemPrivilegedGroup before any user defined authorizers,
+	// unless the user specified the SystemPrivileged authorizer in authzConfig.
+	if r.systemPrivilegedAuthorizer == nil {
+		authorizers = append(authorizers, authorizerfactory.NewPrivilegedGroups(user.SystemPrivilegedGroup))
+	}
 
 	for _, configuredAuthorizer := range authzConfig.Authorizers {
 		// Keep cases in sync with constant list in k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes/modes.go.
 		switch configuredAuthorizer.Type {
+		case authzconfig.AuthorizerType(modes.ModeSystemPrivileged):
+			if r.systemPrivilegedAuthorizer == nil {
+				return nil, nil, fmt.Errorf("authorizer type SystemPrivileged is not allowed if it was not enabled at initial server startup")
+			}
+			authorizers = append(authorizers, r.systemPrivilegedAuthorizer)
 		case authzconfig.AuthorizerType(modes.ModeNode):
 			if r.nodeAuthorizer == nil {
 				return nil, nil, fmt.Errorf("authorizer type Node is not allowed if it was not enabled at initial server startup")

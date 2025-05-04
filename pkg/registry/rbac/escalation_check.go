@@ -19,6 +19,7 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -35,15 +36,11 @@ func EscalationAllowed(ctx context.Context) bool {
 		return false
 	}
 
+	// TODO(hoskeri): This function should return false when the SystemPrivileged authorizer is enabled.
+
 	// system:masters is special because the API server uses it for privileged loopback connections
 	// therefore we know that a member of system:masters can always do anything
-	for _, group := range u.GetGroups() {
-		if group == user.SystemPrivilegedGroup {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(u.GetGroups(), user.SystemPrivilegedGroup)
 }
 
 var roleResources = map[schema.GroupResource]bool{
