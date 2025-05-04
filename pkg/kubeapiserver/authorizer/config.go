@@ -30,7 +30,9 @@ import (
 	authzconfig "k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/apis/apiserver/load"
 	"k8s.io/apiserver/pkg/apis/apiserver/validation"
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
 	authorizationcel "k8s.io/apiserver/pkg/authorization/cel"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	versionedinformers "k8s.io/client-go/informers"
@@ -136,6 +138,13 @@ func (config Config) New(ctx context.Context, serverID string) (authorizer.Autho
 				&rbac.ClusterRoleGetter{Lister: config.VersionedInformerFactory.Rbac().V1().ClusterRoles().Lister()},
 				&rbac.ClusterRoleBindingLister{Lister: config.VersionedInformerFactory.Rbac().V1().ClusterRoleBindings().Lister()},
 			)
+		case authzconfig.AuthorizerType(modes.ModeSystemPrivileged):
+			// TODO(hoskeri): The configuration type is in the generic apiserver, not sure we should add kube-apiserver specific stuff there.
+			// If we can, we should add a flag such as configuredAuthorizer.SystemPrivileged.IgnoreDefaultPrivilegedGroups,
+			// to explicitly ignore the "system:masters" group.
+			//
+			// r.systemPrivilegedAuthorizer replaces the implicit authorizer with an explicit one that behaves the same here.
+			r.systemPrivilegedAuthorizer = authorizerfactory.NewPrivilegedGroups(user.SystemPrivilegedGroup)
 		}
 	}
 
