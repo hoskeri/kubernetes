@@ -348,6 +348,10 @@ type SecureServingInfo struct {
 	// Listener is the secure server network listener.
 	Listener net.Listener
 
+	// AdvertisePort is the port advertised to callers if the listener address does not
+	// include a port (eg: unix domain socket addresses)
+	AdvertisePort int
+
 	// Cert is the main server cert which is used if SNI does not match. Cert must be non-nil and is
 	// allowed to be in SNICerts.
 	Cert dynamiccertificates.CertKeyContentProvider
@@ -1174,7 +1178,17 @@ func (s *SecureServingInfo) HostPort() (string, int, error) {
 	if s == nil || s.Listener == nil {
 		return "", 0, fmt.Errorf("no listener found")
 	}
-	addr := s.Listener.Addr().String()
+
+	la := s.Listener.Addr()
+	// Unix domain socket addresses have no port.
+	if la.Network() == "unix" {
+		if s.AdvertisePort <= 0 {
+			return "", 0, fmt.Errorf("advertisePort must be specified for unix listener address")
+		}
+		return la.String(), s.AdvertisePort, nil
+	}
+
+	addr := la.String()
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to get port from listener address %q: %v", addr, err)

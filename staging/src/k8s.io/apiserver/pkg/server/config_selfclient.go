@@ -33,15 +33,22 @@ func (s *SecureServingInfo) NewClientConfig(caCert []byte) (*restclient.Config, 
 		return nil, nil
 	}
 
-	host, port, err := LoopbackHostPort(s.Listener.Addr().String())
-	if err != nil {
-		return nil, err
+	serverURL := ""
+	switch s.Listener.Addr().Network() {
+	case "unix":
+		serverURL = fmt.Sprintf("unixs:%s", s.Listener.Addr().String())
+	default:
+		host, port, err := LoopbackHostPort(s.Listener.Addr().String())
+		if err != nil {
+			return nil, err
+		}
+		serverURL = "https://" + net.JoinHostPort(host, port)
 	}
 
 	return &restclient.Config{
+		Host: serverURL,
 		// Do not limit loopback client QPS.
-		QPS:  -1,
-		Host: "https://" + net.JoinHostPort(host, port),
+		QPS: -1,
 		TLSClientConfig: restclient.TLSClientConfig{
 			CAData: caCert,
 		},
