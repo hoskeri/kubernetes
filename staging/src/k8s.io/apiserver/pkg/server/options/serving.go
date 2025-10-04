@@ -38,23 +38,30 @@ import (
 )
 
 type SecureServingOptions struct {
+	// BindAddress is the IPv4/IPv6 address the server binds to.
 	BindAddress net.IP
 	// BindPort is ignored when Listener is set, will serve https even with 0.
 	BindPort int
+	// BindUnixAddress is a UNIX domain socket address the server binds to.
+	// Only honored when BindNetwork is set to "unix".
+	BindUnixAddress string
 	// BindNetwork is the type of network to bind to - defaults to "tcp", accepts "tcp",
-	// "tcp4", and "tcp6".
+	// "tcp4", "tcp6" and "unix".
 	BindNetwork string
+
 	// DisableHTTP2Serving indicates that http2 serving should not be enabled.
 	DisableHTTP2Serving bool
 	// Required set to true means that BindPort cannot be zero.
 	Required bool
 	// ExternalAddress is the address advertised, even if BindAddress is a loopback. By default this
-	// is set to BindAddress if the later no loopback, or to the first host interface address.
+	// is set to BindAddress if the latter is not loopback, or to the first host interface address.
 	ExternalAddress net.IP
+	// ExternalPort is the port advertised, used in external references. Defaults to the listener port.
+	// Required if the listen address is a unix domain socket.
+	ExternalPort uint16
 
 	// Listener is the secure server network listener.
-	// either Listener or BindAddress/BindPort/BindNetwork is set,
-	// if Listener is set, use it and omit BindAddress/BindPort/BindNetwork.
+	// if Listener is set, use it and omit BindAddress/BindUnixAddress/BindPort/BindNetwork.
 	Listener net.Listener
 
 	// ServerCert is the TLS cert info for serving secure traffic
@@ -159,6 +166,8 @@ func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet) {
 	if s == nil {
 		return
 	}
+	fs.StringVar(&s.BindUnixAddress, "bind-unix-address", s.BindUnixAddress, ""+
+		"The unix domain socket address to listen on.")
 
 	fs.IPVar(&s.BindAddress, "bind-address", s.BindAddress, ""+
 		"The IP address on which to listen for the --secure-port port. The "+
@@ -242,16 +251,28 @@ func (s *SecureServingOptions) ApplyTo(config **server.SecureServingInfo) error 
 	if s == nil {
 		return nil
 	}
-	if s.BindPort <= 0 && s.Listener == nil {
+	if (s.BindNetwork == "unix" || s.BindPort <= 0) && s.Listener == nil {
 		return nil
 	}
 
 	if s.Listener == nil {
 		var err error
-		addr := net.JoinHostPort(s.BindAddress.String(), strconv.Itoa(s.BindPort))
+		var addr string
+
+		if s.BindUnixAddress != "" {
+			s.BindNetwork = "unix"
+		}
+
+		switch s.BindNetwork {
+		case "", "tcp", "tcp6":
+			addr = net.JoinHostPort(s.BindAddress.String(), strconv.Itoa(s.BindPort))
+		case "unix":
+			addr = s.BindUnixAddress
+		default:
+			return fmt.Errorf("unknown BindNetwork value %q", s.BindNetwork)
+		}
 
 		c := net.ListenConfig{}
-
 		ctls := multipleControls{}
 		if s.PermitPortSharing {
 			ctls = append(ctls, permitPortReuse)
@@ -268,11 +289,15 @@ func (s *SecureServingOptions) ApplyTo(config **server.SecureServingInfo) error 
 			return fmt.Errorf("failed to create listener: %v", err)
 		}
 	} else {
-		if _, ok := s.Listener.Addr().(*net.TCPAddr); !ok {
-			return fmt.Errorf("failed to parse ip and port from listener")
+		switch a := s.Listener.Addr().(type) {
+		case *net.TCPAddr:
+			s.BindPort = a.Port
+			s.BindAddress = a.IP
+		case *net.UnixAddr:
+			s.BindPort = 0
+		default:
+			return fmt.Errorf("unsupported listener address type: %v", a)
 		}
-		s.BindPort = s.Listener.Addr().(*net.TCPAddr).Port
-		s.BindAddress = s.Listener.Addr().(*net.TCPAddr).IP
 	}
 
 	*config = &server.SecureServingInfo{
@@ -423,6 +448,10 @@ func CreateListener(network, addr string, config net.ListenConfig) (net.Listener
 	ln, err := config.Listen(context.TODO(), network, addr)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to listen on %v: %v", addr, err)
+	}
+
+	if network == "unix" {
+		return ln, 0, nil
 	}
 
 	// get port

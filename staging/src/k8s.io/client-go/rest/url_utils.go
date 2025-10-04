@@ -34,16 +34,24 @@ func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, de
 	base := host
 	hostURL, err := url.Parse(base)
 	if err != nil || hostURL.Scheme == "" || hostURL.Host == "" {
-		scheme := "http://"
-		if defaultTLS {
-			scheme = "https://"
-		}
-		hostURL, err = url.Parse(scheme + base)
-		if err != nil {
-			return nil, "", err
-		}
-		if hostURL.Path != "" && hostURL.Path != "/" {
-			return nil, "", fmt.Errorf("host must be a URL or a host:port pair: %q", base)
+		// TODO(hoskeri) fix this.
+		if hostURL.Scheme != "unixs" {
+			scheme := "http://"
+			if defaultTLS {
+				scheme = "https://"
+			}
+			hostURL, err = url.Parse(scheme + base)
+			if err != nil {
+				return nil, "", err
+			}
+			if hostURL.Path != "" && hostURL.Path != "/" {
+				return nil, "", fmt.Errorf("host must be a URL or a host:port pair: %q", base)
+			}
+		} else {
+			// TODO(hoskeri) allow unixs: urls with server path prefixes.
+			hostURL.Opaque = ""
+			hostURL.Host = "unix-listener"
+			hostURL.Path = ""
 		}
 	}
 

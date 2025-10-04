@@ -1174,7 +1174,14 @@ func (s *SecureServingInfo) HostPort() (string, int, error) {
 	if s == nil || s.Listener == nil {
 		return "", 0, fmt.Errorf("no listener found")
 	}
-	addr := s.Listener.Addr().String()
+
+	la := s.Listener.Addr()
+	// Unix domain socket addresses have no port.
+	if la.Network() == "unix" {
+		return la.String(), 0, nil
+	}
+
+	addr := la.String()
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to get port from listener address %q: %v", addr, err)
