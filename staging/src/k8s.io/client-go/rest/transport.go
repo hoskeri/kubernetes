@@ -17,10 +17,14 @@ limitations under the License.
 package rest
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
+	"net"
 	"net/http"
+	"strings"
 
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/pkg/apis/clientauthentication"
 	"k8s.io/client-go/plugin/pkg/client/auth/exec"
 	"k8s.io/client-go/transport"
@@ -111,8 +115,34 @@ func (c *Config) TransportConfig() (*transport.Config, error) {
 		Proxy: c.Proxy,
 	}
 
-	if c.Dial != nil {
-		conf.DialHolder = &transport.DialHolder{Dial: c.Dial}
+	transportDialer := c.Dial
+
+	if strings.HasPrefix(c.Host, "https+unix:") {
+		if c.TLSClientConfig.CAFile == "" && len(c.TLSClientConfig.CAData) == 0 {
+			return nil, errors.New("tls ca certificate required for https+unix: hosts")
+		}
+
+		if c.TLSClientConfig.ServerName == "" {
+			return nil, errors.New("tls server name requires for https+unix: hosts")
+		}
+
+		if transportDialer != nil {
+			return nil, errors.New("custom transport dialer not supported for https+unix: hosts")
+		}
+
+		u, err := utilnet.ParseHTTPSUnixURI(c.Host)
+		if err != nil {
+			return nil, err
+		}
+		socketPath := u.Host
+		ud := &net.Dialer{}
+		transportDialer = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return ud.DialContext(ctx, "unix", socketPath)
+		}
+	}
+
+	if transportDialer != nil {
+		conf.DialHolder = &transport.DialHolder{Dial: transportDialer}
 	}
 
 	if c.ExecProvider != nil && c.AuthProvider != nil {

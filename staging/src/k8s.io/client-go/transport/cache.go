@@ -152,6 +152,10 @@ func (c *tlsTransportCache) get(config *Config) (http.RoundTripper, error) {
 		DialContext:         dial,
 		DisableCompression:  config.DisableCompression,
 	})
+
+	// Register support for unix domain sockets.
+	httpTransport.RegisterProtocol("https+unix", &unixTransport{t: httpTransport})
+
 	var transport http.RoundTripper = httpTransport
 
 	if config.TLS.ReloadCAFiles && tlsConfig != nil && tlsConfig.RootCAs != nil && len(config.TLS.CAFile) > 0 {
@@ -247,6 +251,20 @@ func (v *trackedTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 func (v *trackedTransport) WrappedRoundTripper() http.RoundTripper {
 	return v.rt
+}
+
+type unixTransport struct {
+	t http.RoundTripper
+}
+
+func (urt *unixTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Scheme != "https+unix" {
+		return urt.t.RoundTrip(req)
+	}
+
+	ur := req.Clone(req.Context())
+	ur.URL.Scheme = "https"
+	return urt.t.RoundTrip(ur)
 }
 
 // tlsConfigKey returns a unique key for tls.Config objects returned from TLSConfigFor

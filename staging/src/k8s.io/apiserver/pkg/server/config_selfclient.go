@@ -19,6 +19,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"net/url"
 
 	restclient "k8s.io/client-go/rest"
 	netutils "k8s.io/utils/net"
@@ -36,7 +37,7 @@ func (s *SecureServingInfo) NewClientConfig(caCert []byte) (*restclient.Config, 
 	serverURL := ""
 	switch s.Listener.Addr().Network() {
 	case "unix":
-		serverURL = fmt.Sprintf("unixs:%s", s.Listener.Addr().String())
+		serverURL = fmt.Sprintf("https+unix://%s", url.PathEscape(s.Listener.Addr().String()))
 	default:
 		host, port, err := LoopbackHostPort(s.Listener.Addr().String())
 		if err != nil {
